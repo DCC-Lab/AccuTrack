@@ -117,6 +117,9 @@ LowPass<2> lp(3,1e3,true);
 // std::vector<float> myArray; // Declare a vector to hold the array
 
 bool state = false; // initial state to show there is no values in the array
+bool record = false;
+// bool record_after = false;
+
 int myIndex = 0;
 // float myArray[1000];
  
@@ -165,17 +168,16 @@ void loop()
     //We only use non-blocking commands, so something else (should also be non-blocking) can be done during the movement of the motor
     checkSerial(); //check serial port for new commands
     RunTheMotor(); //function to handle the motor
-    if (stepper.isRunning() ==  true){
+    if (record == true){
       myIndex++;
       if (myIndex >= 1000){
-        // int sensorAverage = movingAverage(100);
-        // int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
-        int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
+        int sensorAverage = movingAverage(100);
+        int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
+        // int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
         Serial.print(getPosition(sensorVoltage));
         Serial.print(", ");
         myIndex = 0;
       }
-      state = true;
     }
     if (stepper.isRunning() == false && state == true){
       t2 = millis();
@@ -184,7 +186,31 @@ void loop()
       // printArray();
       // myIndex = 0;
       state = false;
+      record = false;
+      record_after = true;
+      myIndex = 0;
     }
+
+    if (millis() - t2 > 2000){
+      record = false;
+    }
+
+    // if (record_after == true){
+    //   if (millis() - t2 < 2000){
+    //     myIndex++;
+    //     if (myIndex >= 1000){
+    //       int sensorAverage = movingAverage(100);
+    //       int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
+    //       // int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
+    //       Serial.print(getPosition(sensorVoltage));
+    //       Serial.print(", ");
+    //       myIndex = 0;
+    //     }
+    //   }
+    //   else{
+    //     record_after = false;
+    //   }
+    // }
     // if (stepper.isRunning() == false && state == true){
     //   t2 = millis();
     //   Serial.print("Time taken by the task: "); Serial.print((t2-t1)/1000); Serial.println(" seconds");
@@ -242,7 +268,13 @@ void checkSerial() //function for receiving the commands
                 directionMultiplier = -1; //We define the direction
                 Serial.println("Negative direction."); //print action
                 t1 = millis();
-                RotateRelative(); //Run the function
+                record = true;
+
+                if (millis() - t1 > 2000){
+                  RotateRelative(); //Run the function
+                  state = true;
+                }
+                
 
                 
  
