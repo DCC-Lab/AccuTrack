@@ -82,7 +82,7 @@ class LowPass
 };
 
 // Filter instance
-LowPass<2> lp(3,1e3,true);
+LowPass<1> lp(3,1e3,true);
 
 
 
@@ -117,8 +117,9 @@ LowPass<2> lp(3,1e3,true);
 // std::vector<float> myArray; // Declare a vector to hold the array
 
 bool state = false; // initial state to show there is no values in the array
+bool move = false;
 bool record = false;
-// bool record_after = false;
+bool record_after = false;
 
 int myIndex = 0;
 // float myArray[1000];
@@ -171,52 +172,50 @@ void loop()
     if (record == true){
       myIndex++;
       if (myIndex >= 1000){
-        int sensorAverage = movingAverage(100);
-        int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
-        // int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
-        Serial.print(getPosition(sensorVoltage));
+        // int sensorAverage = movingAverage(500);
+        // int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
+        int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
+        float xn = getPosition(sensorVoltage);
+        // Serial.print(lp.filt(xn));
+        Serial.print(xn);
         Serial.print(", ");
         myIndex = 0;
+      }
+      if (millis() - t1 > 2000 && move == true){
+        RotateRelative(); //Run the function
+        state = true;
+        move = false;
       }
     }
     if (stepper.isRunning() == false && state == true){
       t2 = millis();
-      Serial.println();
-      Serial.print("Time taken by the task: "); Serial.print((t2-t1)/1000); Serial.println(" seconds");
-      // printArray();
-      // myIndex = 0;
+      // Serial.println();
+      // Serial.print("Time taken by the task: "); Serial.print((t2-t1)/1000); Serial.println(" seconds");
       state = false;
       record = false;
       record_after = true;
-      myIndex = 0;
     }
 
-    if (millis() - t2 > 2000){
-      record = false;
+    if (record_after == true){
+      if (millis() - t2 < 2000){
+        myIndex++;
+        if (myIndex >= 1000){
+          // int sensorAverage = movingAverage(500);
+          // int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
+          int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
+          float xn = getPosition(sensorVoltage);
+          // Serial.print(lp.filt(xn));
+          Serial.print(xn);
+          Serial.print(", ");
+          myIndex = 0;
+        }
+      }
+      else{
+        record_after = false;
+        Serial.println();
+        Serial.print("Time taken by the task: "); Serial.print((t2-t1)/1000); Serial.println(" seconds");
+      }
     }
-
-    // if (record_after == true){
-    //   if (millis() - t2 < 2000){
-    //     myIndex++;
-    //     if (myIndex >= 1000){
-    //       int sensorAverage = movingAverage(100);
-    //       int sensorVoltage = map(sensorAverage, 0, 4095, 0, 5000);
-    //       // int sensorVoltage = map(analogRead(analogPin), 0, 4095, 0, 5000);
-    //       Serial.print(getPosition(sensorVoltage));
-    //       Serial.print(", ");
-    //       myIndex = 0;
-    //     }
-    //   }
-    //   else{
-    //     record_after = false;
-    //   }
-    // }
-    // if (stepper.isRunning() == false && state == true){
-    //   t2 = millis();
-    //   Serial.print("Time taken by the task: "); Serial.print((t2-t1)/1000); Serial.println(" seconds");
-    //   state = false;
-    // }
- 
 }
  
  
@@ -269,11 +268,7 @@ void checkSerial() //function for receiving the commands
                 Serial.println("Negative direction."); //print action
                 t1 = millis();
                 record = true;
-
-                if (millis() - t1 > 2000){
-                  RotateRelative(); //Run the function
-                  state = true;
-                }
+                move = true;
                 
 
                 
