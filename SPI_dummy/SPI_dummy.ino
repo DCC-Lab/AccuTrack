@@ -21,6 +21,8 @@ void setup() {
   // Set the clock speed for the SPI communication
   SPI.setClockDivider(SPI_CLOCK_DIV2);
 
+  pwrUp();
+
 }
 
 void loop() {
@@ -41,40 +43,33 @@ void loop() {
 bool readMotion() {
   // Take the chipSelect pin low to select the device
   digitalWrite(chipSelect, LOW);
-  
-  // Send the address of the motion register
-  SPI.transfer(MOTION_REG);
-  
+    
   // Read the motion register
-  byte motion = SPI.transfer(0x00);
+  uint8_t motion = readRegister(MOTION_REG, 1);
   
   // Take the chipSelect pin high to deselect the device
   digitalWrite(chipSelect, HIGH);
   
+  return motion & 0x80;
   // Check if motion has occurred
-  if (motion & 0x01) {
-    return true;
-  }
-  else {
-    return false;
-  }
+  // if (motion & 0x80) {
+  //   return true;
+  // }
+  // else {
+  //   return false;
+  // }
 }
 
 int readDeltaX() {
   // Take the chipSelect pin low to select the device
   digitalWrite(chipSelect, LOW);
-  
-  // Send the address of the Delta_X_L register
-  SPI.transfer(DELTA_X_L);
-  
-  // Read the Delta_X_L and Delta_X_H registers
-  byte deltaX_L = SPI.transfer(0x00);
-  byte deltaX_H = SPI.transfer(0x00);
-  
-  // Take the chipSelect pin high to deselect the device
+  uint8_t deltaX_L = readRegister(DELTA_X_L, 1);
   digitalWrite(chipSelect, HIGH);
-  
-  // Combine the two bytes to form a 16-bit value
+  delay(5);
+  digitalWrite(chipSelect, LOW);
+  uint8_t deltaX_H = readRegister(DELTA_X_H, 1);
+  digitalWrite(chipSelect, HIGH);
+
   int deltaX = (deltaX_H << 8) | deltaX_L;
   
   return deltaX;
@@ -83,44 +78,44 @@ int readDeltaX() {
 int readDeltaY() {
   // Take the chipSelect pin low to select the device
   digitalWrite(chipSelect, LOW);
-  
-  // Send the address of the Delta_Y_L register
-  SPI.transfer(DELTA_Y_L);
-  
-  // Read the Delta_Y_L and Delta_Y_H registers
-  byte deltaY_L = SPI.transfer(0x00);
-  byte deltaY_H = SPI.transfer(0x00);
-  
-  // Take the chipSelect pin high to deselect the device
+  uint8_t deltaY_L = readRegister(DELTA_Y_L, 1);
   digitalWrite(chipSelect, HIGH);
+  delay(5);
+  digitalWrite(chipSelect, LOW);
+  uint8_t deltaY_H = readRegister(DELTA_Y_H, 1);
+  digitalWrite(chipSelect, HIGH);
+
+  int deltaX = (deltaY_H << 8) | deltaY_L;
   
-  // Combine the two bytes to form a 16-bit value
-  int deltaY = (deltaY_H << 8);
+  return deltaX;
 }
 
-void pwrUp(){
-  delay(8); // wait 8 ms after the power applied to VDD & VDDIO
-
+void pwrUp(){ // Power up sequence, see datasheet
+  delay(8); 
   digitalWrite(chipSelect, HIGH);
-  digitalWrite(chipSelect, LOW); // HIGH then LOW on NSC to reset the SPI port
-
-  writeRegister(PWR_UP_RST, 0x5A); // Write to Power_Up_Reset with command 0x5A
-
-  delay(5) // wait 5 ms after writing to Power_Up_Reset
-
-  writeRegister(CONFIG3, 0x01) // Write to Config3 with command 0x01
-
-  delay(1) // Wait 1ms before SROM download
-
-  writeRegister()
-
-
+  digitalWrite(chipSelect, LOW);
+  writeRegister(PWR_UP_RST, 0x5A); 
+  delay(5);
+  writeRegister(CONFIG3, 0x01);
+  // delay(1); 
+  // writeRegister(0x25, 0x04);
+  // writeRegister(0x13, 0x1D);
+  // delay(10)
+  // writeRegister(0x13, 0x18);
+  delay(35);
+  readRegister(0x02, 1);
+  readRegister(0x03, 1);
+  readRegister(0x04, 1);
+  readRegister(0x05, 1);
+  readRegister(0x06, 1);
+  delay(50);
+  digitalWrite(chipSelect, HIGH);
 }
 
 
-void writeRegister(byte thisRegister, byte thisValue) {
+void writeRegister(uint8_t thisRegister, uint8_t thisValue) {
 
-  byte dataToSend = thisRegister | WRITE;
+  uint8_t dataToSend = thisRegister | WRITE;
 
   // take the chip select low to select the device:
 
@@ -135,9 +130,9 @@ void writeRegister(byte thisRegister, byte thisValue) {
   digitalWrite(chipSelect, HIGH);
 }
 
-unsigned int readRegister(byte thisRegister, int bytesToRead) {
+unsigned int readRegister(uint8_t thisRegister, int bytesToRead) {
 
-  byte inByte = 0;           // incoming byte from the SPI
+  uint8_t inByte = 0;           // incoming byte from the SPI
 
   unsigned int result = 0;   // result to return
 
@@ -145,13 +140,13 @@ unsigned int readRegister(byte thisRegister, int bytesToRead) {
 
   Serial.print("\t");
 
-  byte dataToSend = thisRegister | READ;
+  uint8_t dataToSend = thisRegister | READ;
 
   Serial.println(thisRegister, BIN);
 
   // take the chip select low to select the device:
 
-  digitalWrite(chipSelectPin, LOW);
+  digitalWrite(chipSelect, LOW);
 
   // send the device the register you want to read:
 
@@ -187,7 +182,7 @@ unsigned int readRegister(byte thisRegister, int bytesToRead) {
 
   // take the chip select high to de-select:
 
-  digitalWrite(chipSelectPin, HIGH);
+  digitalWrite(chipSelect, HIGH);
 
   // return the result:
 
