@@ -1,128 +1,276 @@
 
 #include <SPI.h>
 
-const uint8_t chipSelect = 10;
 const uint8_t MOTION_REG = 0x02;
 const uint8_t DELTA_X_L = 0x03;
 const uint8_t DELTA_X_H = 0x04;
 const uint8_t DELTA_Y_L = 0x05;
 const uint8_t DELTA_Y_H = 0x06;
+const uint8_t OBSERVATION = 0x26;
 const uint8_t CONFIG3 = 0x23;
+const uint8_t CONFIG5 = 0x25;
+const uint8_t SROM_ENABLE = 0x13;
+const uint8_t SROM_LOAD_BURST = 0x62;
+const uint8_t DATA_OUT_L = 0x2F;
+const uint8_t DATA_OUT_U = 0x2E;
 const uint8_t PWR_UP_RST = 0x3A;
-const uint8_t READ = 0b00000000; // READ command with 0 on MSB
+const uint8_t PRODUCT_ID = 0X00;
+const uint8_t INV_PRODUCT_ID = 0X3F;
+const uint8_t READ = 0b01111111; // READ command with 0 on MSB
 const uint8_t WRITE = 0b10000000; // WRITE command with 1 on MSB
 
+bool motionBitHigh = false;
+volatile bool dataAvailable = false;
+
+// int last_State = 1;
+
+const int interruptPin = 5;
+const int nrstPin = 2;
+const int chipSelect = 10;
+
+int x=0;
+int y=0;
+
 void setup() {
-  // Set chipSelect as an output
-  pinMode(chipSelect, OUTPUT);
-  pinMode(4, INPUT);
+
+  pinMode(chipSelect, OUTPUT); // Set chipSelect as an output
+  digitalWrite(chipSelect, HIGH);
+
+  pinMode(nrstPin, OUTPUT); // NRST pin
+  digitalWrite(nrstPin, HIGH);
+  
+  pinMode(interruptPin, INPUT);
 
   Serial.begin(115200);
   
   SPI.begin();
 
-
   pwrUp();
 
+  delay(35); // From navigation engine start to valid motion delay
+
+  attachInterrupt(digitalPinToInterrupt(interruptPin),interruptIN,FALLING);  // Interrupt pin for motion detection. Needs to be created after the pwrUp function
+                                                                            // because motionPin is used for chip set-up purpose during pwrUp.
+
+  delay(100);
 }
 
-void loop() {
-  // Check if motion has occurred
 
-  Serial.print("Motion pin output: ");
-  Serial.println(digitalRead(4));
+void loop() {
+
+  // testerFunction();
+
+  // Check if motion has occurred
+  // delayMicroseconds(20000);
+  // uint8_t dummy = readRegister(0x02, 1);
+
+  // if ((dummy & 0x80) != 0){
+  // // delayMicroseconds(100);
+  // int16_t deltaX = readDeltaX();
+  // // delayMicroseconds(100);
+  // // int16_t deltaY = readDeltaY();
+  // x += deltaX;
+  // // y += deltaY;
+  // // Serial.print("Delta X: ");
+  // if(deltaX > 100){
+  //   Serial.print(x, DEC);
+  // // Serial.print("Delta Y: ");
+  //   Serial.println(" ");
+  //   }
+  // // Serial.println(y, DEC);
+  // }
+/*
+  // int motion_pin = digitalRead(4);
+  // if (motion_pin != last_State){
+  //   Serial.print("Motion pin: ");
+  //   Serial.println(motion_pin);
+  //   last_State = motion_pin;
+  // }
+
+
+  // if (motionBitHigh){
+    // uint8_t motion_read  = readRegister(MOTION_REG, 1);
+    // delayMicroseconds(20);
+    // writeRegister(OBSERVATION, 0x00);
+    // delayMicroseconds(180);
+    // uint8_t obs  = readRegister(OBSERVATION, 1);
+    // delayMicroseconds(20);
+    // uint8_t x_L  = readRegister(DELTA_X_L, 1);
+    // delayMicroseconds(20);
+    // uint8_t x_H  = readRegister(DELTA_X_H, 1);
+    // delayMicroseconds(20);
+    // uint8_t y_L  = readRegister(DELTA_Y_L, 1);
+    // delayMicroseconds(20);
+    // uint8_t y_H  = readRegister(DELTA_Y_H, 1);
+    // delayMicroseconds(20);
+    
+    // Serial.print("");
+    // Serial.println(x_L);
+    // Serial.print("");
+    // Serial.println(x_H);
+    // Serial.print("");
+    // Serial.println(y_L);
+    // Serial.print("");
+    // Serial.println(y_H);
+    // }
 
   // Serial.print("motion bit: ");
   // Serial.println(readMotion(), BIN);
+*/
 
-  
+  // noInterrupts();
 
+  // if (dataAvailable == true){
+  //   if(readMotion()){
+  //     uint16_t deltaX = readDeltaX();
+  //     uint16_t deltaY = readDeltaY();
+      
 
-  // if (readMotion() == true) {
+  //     // Print the accumulated motion
+      // Serial.print("Delta X: ");
+      // Serial.println(deltaX, DEC);
+      // Serial.print("Delta Y: ");
+      // Serial.println(deltaY, DEC);
+
+  //   }
+  //   dataAvailable = false;
+  // }
+
+  // interrupts();
+  // if (motionBitHigh == true) {
+
   //   // Read the accumulated motion
   //   uint16_t deltaX = readDeltaX();
   //   uint16_t deltaY = readDeltaY();
     
+
   //   // Print the accumulated motion
   //   Serial.print("Delta X: ");
-  //   Serial.println(deltaX, BIN);
+  //   Serial.println(deltaX, DEC);
   //   Serial.print("Delta Y: ");
-  //   Serial.println(deltaY, BIN);
+  //   Serial.println(deltaY, DEC);
+
+  //   // motionBitHigh = false; // Reset the motion bit to low until next interrupt
   // }
+
 }
 
-uint8_t readMotion() {
+void interruptIN() {
+  dataAvailable = true;
+}
+
+bool readMotion() {
     
   // Read the motion register
+  delayMicroseconds(20);
   uint8_t motion = readRegister(MOTION_REG, 1);
-  // Serial.println(motion, BIN);
-
-  return motion;
-
-  // return motion & 0x80;
-  // Check if motion has occurred
-  // if (motion & 0x80) {
-  //   return true;
-  // }
-  // else {
-  //   return false;
-  // }
+  return (motion & 0x80) != 0;
+  // Serial.print("Bit state: ");
+  // Serial.println(motionBitHigh);
 }
 
-uint16_t readDeltaX() {
-  uint8_t deltaX_L = readRegister(DELTA_X_L, 1);
-  delay(0.2);
-  uint8_t deltaX_H = readRegister(DELTA_X_H, 1);
+int16_t readDeltaX() {
+  delayMicroseconds(20);
+  uint16_t deltaX_L = readRegister(DELTA_X_L, 1);
+  delayMicroseconds(20);
+  uint16_t deltaX_H = readRegister(DELTA_X_H, 1);
 
-  uint16_t deltaX = (deltaX_H << 8) | deltaX_L;
+  int16_t deltaX = (deltaX_H << 8) | deltaX_L;
   
   return deltaX;
 }
 
-uint16_t readDeltaY() {
-  uint8_t deltaY_L = readRegister(DELTA_Y_L, 1);
-  delay(0.2);
-  uint8_t deltaY_H = readRegister(DELTA_Y_H, 1);
+int16_t readDeltaY() {
+  delayMicroseconds(20);
+  uint16_t deltaY_L = readRegister(DELTA_Y_L, 1);
+  delayMicroseconds(20);
+  uint16_t deltaY_H = readRegister(DELTA_Y_H, 1);
 
-  uint16_t deltaX = (deltaY_H << 8) | deltaY_L;
+  int16_t deltaY = (deltaY_H << 8) | deltaY_L;
   
-  return deltaX;
+  return deltaY;
 }
 
 void pwrUp(){ // Power up sequence, see datasheet
+  
   Serial.print("Power up started.");
   Serial.println();
+  
   delay(8); 
   digitalWrite(chipSelect, HIGH);
+  
+  delay(1);
   digitalWrite(chipSelect, LOW);
 
   writeRegister(PWR_UP_RST, 0x5A);
   delay(5);
+  
   writeRegister(CONFIG3, 0x01);
   delay(1); 
-  downloadSROM();
-  delay(35);
-  uint8_t a = readRegister(0x02, 1);
-  uint8_t b = readRegister(0x03, 1);
-  uint8_t c = readRegister(0x04, 1);
-  uint8_t d = readRegister(0x05, 1);
-  uint8_t e = readRegister(0x06, 1);
+  
+  downloadSROM(); // Download SROM
   delay(50);
+
+  writeRegister(CONFIG3, 0x01);
+  delay(35);
+
+  resetMotionReg(); // Read the Motion Reg, delta_X and delta_Y
+
+  delay(50);
+
   Serial.print("Power up sequence completed.");
   Serial.println();
 
-  uint8_t product_ID = readRegister(0x00, 1);
+  checkID(); // To verify if chip ID and inverse ID are complementary (x&^x = 0x00)
+
+}
+
+void resetMotionReg(){
+
+  /*
+    Part of Power_reset from data sheet
+  */
+
+  delayMicroseconds(20);
+  uint8_t a = readRegister(MOTION_REG, 1);
+  delayMicroseconds(20);
+  uint8_t b = readRegister(DELTA_X_L, 1);
+  delayMicroseconds(20);
+  uint8_t c = readRegister(DELTA_X_H, 1);
+  delayMicroseconds(20);
+  uint8_t d = readRegister(DELTA_Y_L, 1);
+  delayMicroseconds(20);
+  uint8_t e = readRegister(DELTA_Y_H, 1);
+}
+
+void checkID(){
+
+  /*
+    Function to confirm that ID & inverse_ID gives nul. This confirms the SPI link is functional.
+  */
+
+  uint8_t product_ID = readRegister(PRODUCT_ID, 1);
+  delayMicroseconds(20);
+  uint8_t inverse_ID = readRegister(INV_PRODUCT_ID, 1);
+  uint8_t result_ID = (product_ID) & inverse_ID;
+  Serial.print("PROD_id = ");
+  Serial.println(product_ID, BIN);
+  Serial.print("INV_PROD_id = ");
+  Serial.println(inverse_ID, BIN);
 
   if (product_ID != 0x00){
-    Serial.print("Serial communication link is functional.");
+    if(result_ID == 0x00){
+      Serial.print("Serial communication link is functional. ");
+      Serial.println();
+    }
+    else{
+    Serial.print("Serial communication link is not functional. ");
     Serial.println();
-    Serial.print("Product ID: ");
-    Serial.println(product_ID, DEC);
+    }
   }
   else{
-    Serial.print("Serial communication link is not functional.");
+    Serial.print("Serial communication link is not functional. ");
     Serial.println();
-    // Serial.println(product_ID);
   }
 }
 
@@ -4224,36 +4372,62 @@ void downloadSROM(){
   0x72,
   };
 
+
   Serial.print("SROM download started.");
   Serial.println();
-  writeRegister(0x25, 0x04);
-  delay(1);
-  writeRegister(0x13, 0x1D);
+  writeRegister(CONFIG5, 0x04);
+  delayMicroseconds(180);
+  writeRegister(SROM_ENABLE, 0x1D);
   delay(10);
-  writeRegister(0x13, 0x18);
-
+  writeRegister(SROM_ENABLE, 0x18);
+  
+  delayMicroseconds(180);
+  uint8_t adress = SROM_LOAD_BURST | WRITE;
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
   digitalWrite(chipSelect, LOW);
   // SPI transfert burst to chip -- so not using write register to keep NSC pin LOW
-  uint8_t adress = 0x62 | WRITE;
+  delayMicroseconds(1);
   SPI.transfer(adress);
-  for (int i=0; i<sizeof SROM_BYTES; i++) {
-    uint8_t value = SROM_BYTES[i]; 
-    SPI.transfer(value);
-    // float progress = (i/4093) * 100;
-    // Serial.println(progress);
-    delay(0.015);
+  // SPI.transfer(SROM_BYTES, 4094);
+  for (int i=0; i<sizeof(SROM_BYTES); i++) {
+    delayMicroseconds(15);
+    SPI.transfer(SROM_BYTES[i]);
   }
+
+  delayMicroseconds(15);
   digitalWrite(chipSelect, HIGH);
+  delayMicroseconds(1);
+  SPI.endTransaction();
   delay(50);
-  writeRegister(0x23, 0x01);
+  writeRegister(CONFIG3, 0x01);
   delay(1);
 
-  Serial.print("SROM dowload completed");
-  Serial.println();
 
-  uint8_t srom_ID = readRegister(0x29, 1);
-  Serial.print("SROM_ID: ");
-  Serial.println(srom_ID, DEC);
+  writeRegister(SROM_ENABLE, 0x15);
+  delay(100);
+  uint16_t upperByte = readRegister(DATA_OUT_U, 1);
+  delayMicroseconds(20);
+  uint16_t lowerByte = readRegister(DATA_OUT_L, 1);
+  uint16_t crcValue = (upperByte << 8) | lowerByte;
+  if(crcValue == 0xBEEF){
+    Serial.print("SROM dowloaded successfully!");
+  Serial.println();
+  } 
+  else{
+    Serial.print("An error occured during SROM downloading.");
+    Serial.println();
+  }
+
+  Serial.print("CRC value: ");
+  Serial.println(crcValue, HEX);
+
+  delayMicroseconds(20);
+  writeRegister(0x23, 0x01);
+
+  // delayMicroseconds(200);
+  // uint8_t srom_ID = readRegister(0x29, 1);
+  // Serial.print("SROM_ID: ");
+  // Serial.println(srom_ID, DEC);
 }
 
 
@@ -4263,15 +4437,19 @@ void writeRegister(uint8_t thisRegister, uint8_t thisValue) {
 
   // take the chip select low to select the device:
 
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
+  
   digitalWrite(chipSelect, LOW);
+  delayMicroseconds(1);
 
   SPI.transfer(dataToSend); //Send register location
-  delay(0.2);
-  SPI.transfer(thisValue);  //Send value to record into register
-  delay(0.2);
-  // take the chip select high to de-select:
 
+  SPI.transfer(thisValue);
+  
+  // take the chip select high to de-select:
+  delayMicroseconds(35);
   digitalWrite(chipSelect, HIGH);
+  SPI.endTransaction();
 }
 
 uint8_t readRegister(uint8_t thisRegister, int bytesToRead) {
@@ -4284,52 +4462,97 @@ uint8_t readRegister(uint8_t thisRegister, int bytesToRead) {
 
   // Serial.print("\t");
 
-  uint8_t dataToSend = thisRegister | READ;
+  uint8_t dataToSend = thisRegister & READ;
 
   // Serial.println(thisRegister, BIN);
 
   // take the chip select low to select the device:
-
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
   digitalWrite(chipSelect, LOW);
-
+  delayMicroseconds(1);
   // send the device the register you want to read:
 
   SPI.transfer(dataToSend);
 
   // send a value of 0 to read the first byte returned:
+  delayMicroseconds(160);
 
   result = SPI.transfer(0x00);
 
   // decrement the number of bytes left to read:
 
+
   bytesToRead--;
 
   // if you still have another byte to read:
 
-  if (bytesToRead > 0) {
+  // if (bytesToRead > 0) {
 
-    // shift the first byte left, then get the second byte:
+  //   // shift the first byte left, then get the second byte:
 
-    result = result << 8;
+  //   result = result << 8;
 
-    inByte = SPI.transfer(0x00);
+  //   inByte = SPI.transfer(0x00);
 
-    // combine the byte you just got with the previous one:
+  //   // combine the byte you just got with the previous one:
 
-    result = result | inByte;
+  //   result = result | inByte;
 
-    // decrement the number of bytes left to read:
+  //   // decrement the number of bytes left to read:
 
-    bytesToRead--;
+  //   bytesToRead--;
 
-  }
+  // }
 
   // take the chip select high to de-select:
-
+  delayMicroseconds(1);
   digitalWrite(chipSelect, HIGH);
-
+  SPI.endTransaction();
   // return the result:
-
-  return (result);
+  return result;
 }
+void testerFunction(){
+
+  /*
+    Function to test CRC value. If the return value is 0xBEEF, the SPI link is functional and the SROM dowload is successfull.
+  */
+
+  if(Serial.available()){
+    String incomingByte = Serial.readStringUntil('\n');
+    if (incomingByte.equals("crctest")){
+      writeRegister(SROM_ENABLE, 0x15);
+      delay(100);
+      uint16_t upperByte = readRegister(DATA_OUT_U, 1);
+      delayMicroseconds(20);
+      uint16_t lowerByte = readRegister(DATA_OUT_L, 1);
+      uint16_t crcValue = (upperByte << 8) | lowerByte;
+
+      Serial.print("CRC value: ");
+      Serial.println(crcValue, HEX);
+
+      delayMicroseconds(20);
+      writeRegister(0x23, 0x01);
+    }
+    if (incomingByte.equals("readmotion")){
+
+      // uint8_t dummy = readRegister(0x02, 1);
+      // uint16_t deltaX = readDeltaX();
+      // uint16_t deltaY = readDeltaY();
+      Serial.print("Motion registers cleared");
+      Serial.println();
+    }
+    if (incomingByte.equals("commands")){
+      Serial.print("crctest: check CRC value. Should be BEEF if SROM is valid");
+      Serial.println();
+      Serial.print("readmotion: Read the motion register (0x02) to clear the motion pin.");
+      Serial.println();
+    }
+    else{
+      Serial.print("Bad command, write 'commands' to see your options");
+      Serial.println();
+    }
+  }
+}
+
+void 
 
