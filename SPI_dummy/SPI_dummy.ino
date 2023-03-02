@@ -7,6 +7,7 @@ const uint8_t DELTA_X_H = 0x04;
 const uint8_t DELTA_Y_L = 0x05;
 const uint8_t DELTA_Y_H = 0x06;
 const uint8_t OBSERVATION = 0x26;
+const uint8_t CONFIG2 = 0x14;
 const uint8_t CONFIG3 = 0x23;
 const uint8_t CONFIG5 = 0x25;
 const uint8_t SROM_ENABLE = 0x13;
@@ -16,20 +17,22 @@ const uint8_t DATA_OUT_U = 0x2E;
 const uint8_t PWR_UP_RST = 0x3A;
 const uint8_t PRODUCT_ID = 0X00;
 const uint8_t INV_PRODUCT_ID = 0X3F;
+const uint8_t MOTION_BURST = 0x50;
+
 const uint8_t READ = 0b01111111; // READ command with 0 on MSB
 const uint8_t WRITE = 0b10000000; // WRITE command with 1 on MSB
 
 bool motionBitHigh = false;
 volatile bool dataAvailable = false;
 
-// int last_State = 1;
-
 const int interruptPin = 5;
 const int nrstPin = 2;
 const int chipSelect = 10;
 
-int x=0;
-int y=0;
+uint8_t dataBurstMotion[15];
+
+long position_X = 0;
+long position_Y = 0;
 
 void setup() {
 
@@ -39,7 +42,7 @@ void setup() {
   pinMode(nrstPin, OUTPUT); // NRST pin
   digitalWrite(nrstPin, HIGH);
   
-  pinMode(interruptPin, INPUT);
+  pinMode(interruptPin, INPUT_PULLUP);
 
   Serial.begin(115200);
   
@@ -49,43 +52,44 @@ void setup() {
 
   delay(35); // From navigation engine start to valid motion delay
 
-  attachInterrupt(digitalPinToInterrupt(interruptPin),interruptIN,FALLING);  // Interrupt pin for motion detection. Needs to be created after the pwrUp function
+  // attachInterrupt(digitalPinToInterrupt(interruptPin),interruptIN,FALLING);  // Interrupt pin for motion detection. Needs to be created after the pwrUp function
                                                                             // because motionPin is used for chip set-up purpose during pwrUp.
 
-  delay(100);
+  // delay(100);
+
+  // motionBurstSetUp();
+
+
 }
 
 
 void loop() {
 
-  // testerFunction();
+  setPositionZero();
 
-  // Check if motion has occurred
-  // delayMicroseconds(20000);
-  // uint8_t dummy = readRegister(0x02, 1);
+  delay(20);
 
-  // if ((dummy & 0x80) != 0){
-  // // delayMicroseconds(100);
-  // int16_t deltaX = readDeltaX();
-  // // delayMicroseconds(100);
-  // // int16_t deltaY = readDeltaY();
-  // x += deltaX;
-  // // y += deltaY;
-  // // Serial.print("Delta X: ");
-  // if(deltaX > 100){
-  //   Serial.print(x, DEC);
-  // // Serial.print("Delta Y: ");
-  //   Serial.println(" ");
-  //   }
-  // // Serial.println(y, DEC);
-  // }
-/*
-  // int motion_pin = digitalRead(4);
-  // if (motion_pin != last_State){
-  //   Serial.print("Motion pin: ");
-  //   Serial.println(motion_pin);
-  //   last_State = motion_pin;
-  // }
+/// CODE FONCTIONNEL ////////////////////
+
+  // motionBurstRead(6); // Motion, Observation, DXL, DXH, DYL, DYH
+    
+  // int16_t delta_X = dataBurstMotion[3]*256 + dataBurstMotion[2];
+  // int16_t delta_Y = dataBurstMotion[5]*256 + dataBurstMotion[4];
+    
+  // Serial.print(delta_X);
+  // Serial.print(" ");
+  // Serial.print(delta_Y);
+  // Serial.print(" ");
+  // Serial.print(1000);
+  // Serial.print(" ");
+  // Serial.println(-1000);
+
+////////////////////////////////////////
+
+
+
+
+
 
 
   // if (motionBitHigh){
@@ -116,7 +120,6 @@ void loop() {
 
   // Serial.print("motion bit: ");
   // Serial.println(readMotion(), BIN);
-*/
 
   // noInterrupts();
 
@@ -139,18 +142,33 @@ void loop() {
   // interrupts();
   // if (motionBitHigh == true) {
 
-  //   // Read the accumulated motion
-  //   uint16_t deltaX = readDeltaX();
-  //   uint16_t deltaY = readDeltaY();
-    
+  // Read the accumulated motion
 
-  //   // Print the accumulated motion
-  //   Serial.print("Delta X: ");
-  //   Serial.println(deltaX, DEC);
-  //   Serial.print("Delta Y: ");
-  //   Serial.println(deltaY, DEC);
 
-  //   // motionBitHigh = false; // Reset the motion bit to low until next interrupt
+
+  bool moving = readMotion();
+
+  // int16_t deltaX = readDeltaX();
+  // int16_t deltaY = readDeltaY();
+
+  position_X += readDeltaX();
+  position_Y += readDeltaY();
+  long position_Total = sqrt(pow(position_X, 2) + pow(position_Y,2));
+
+
+  // Print the accumulated motion
+  Serial.print(" ");
+  Serial.print(position_X);
+  Serial.print(" ");
+  Serial.print(position_Y);
+  Serial.print(" ");
+  Serial.println(position_Total);
+
+  // Serial.print(" ");
+  // Serial.print(1000);
+  // Serial.print(" ");
+  // Serial.println(-1000);
+  // motionBitHigh = false; // Reset the motion bit to low until next interrupt
   // }
 
 }
@@ -165,28 +183,31 @@ bool readMotion() {
   delayMicroseconds(20);
   uint8_t motion = readRegister(MOTION_REG, 1);
   return (motion & 0x80) != 0;
-  // Serial.print("Bit state: ");
-  // Serial.println(motionBitHigh);
+  
+}
+
+void readObservation(){
+  delayMicroseconds(20);
 }
 
 int16_t readDeltaX() {
   delayMicroseconds(20);
-  uint16_t deltaX_L = readRegister(DELTA_X_L, 1);
+  uint8_t deltaX_L = readRegister(DELTA_X_L, 1);
   delayMicroseconds(20);
-  uint16_t deltaX_H = readRegister(DELTA_X_H, 1);
+  uint8_t deltaX_H = readRegister(DELTA_X_H, 1);
 
-  int16_t deltaX = (deltaX_H << 8) | deltaX_L;
+  int16_t deltaX = deltaX_H*256 + deltaX_L;
   
   return deltaX;
 }
 
 int16_t readDeltaY() {
   delayMicroseconds(20);
-  uint16_t deltaY_L = readRegister(DELTA_Y_L, 1);
+  uint8_t deltaY_L = readRegister(DELTA_Y_L, 1);
   delayMicroseconds(20);
-  uint16_t deltaY_H = readRegister(DELTA_Y_H, 1);
+  uint8_t deltaY_H = readRegister(DELTA_Y_H, 1);
 
-  int16_t deltaY = (deltaY_H << 8) | deltaY_L;
+  int16_t deltaY = deltaY_H*256 + deltaY_L;
   
   return deltaY;
 }
@@ -4482,7 +4503,7 @@ uint8_t readRegister(uint8_t thisRegister, int bytesToRead) {
   // decrement the number of bytes left to read:
 
 
-  bytesToRead--;
+  // bytesToRead--;
 
   // if you still have another byte to read:
 
@@ -4554,5 +4575,118 @@ void testerFunction(){
   }
 }
 
-void 
+void motionBurstSetUp(){
+  writeRegister(CONFIG2, 0x18); //Write 0x18 to config2
+  writeRegister(MOTION_BURST, 0x00); //Write anything to Motion_Burst register
+
+  uint8_t inByte = 0;           // incoming byte from the SPI
+
+  int bytesToRead = 15;
+
+  uint8_t dataToSend = MOTION_BURST & READ;
+
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
+  digitalWrite(chipSelect, LOW);
+  delayMicroseconds(1);
+  // send the device the register you want to read:
+
+  SPI.transfer(dataToSend);
+
+  delayMicroseconds(35);
+
+  for(int i = 0; i < 15; i++){
+    dataBurstMotion[i] = SPI.transfer(0x00);
+  }
+
+  // result = SPI.transfer(0x00);
+
+  // bytesToRead--;
+
+  // // if you still have another byte to read:
+
+  // while (bytesToRead > 0) {
+
+  //   // shift the first byte left, then get the second byte:
+
+  //   result = result << 8;
+
+  //   inByte = SPI.transfer(0x00);
+
+  //   // combine the byte you just got with the previous one:
+
+  //   result = result | inByte;
+
+  //   // decrement the number of bytes left to read:
+
+  //   bytesToRead--;
+
+  // }
+  delayMicroseconds(1);
+  digitalWrite(chipSelect, HIGH);
+  delayMicroseconds(1);
+  SPI.endTransaction();
+  // return the result:
+  Serial.print("Burst motion bit input: ");
+  for(int i = 0; i<sizeof(dataBurstMotion); i++){
+    Serial.println(dataBurstMotion[i], BIN);
+  }
+
+  uint8_t CRC = 0x00;
+  for (int i = 0; i < 14; i++)
+    {
+      CRC ^= dataBurstMotion[i];
+      if (CRC & 0x80) 
+        CRC = (CRC << 1) ^ 0xD5;
+      else 
+        CRC <<= 1;
+    }
+  Serial.print("CRC: ");
+  Serial.println(dataBurstMotion[14]);
+  Serial.print("CRC test: ");
+  Serial.println(CRC);
+  // return result;
+}
+
+void motionBurstRead(int bytesToRead){
+  
+  delay(1);
+  
+  writeRegister(0x50, 0x00);
+  
+  uint8_t inByte = 0;           // incoming byte from the SPI
+
+  uint8_t dataToSend = MOTION_BURST & READ;
+
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
+  digitalWrite(chipSelect, LOW);
+  delayMicroseconds(1);
+  // send the device the register you want to read:
+
+  SPI.transfer(dataToSend);
+
+  delayMicroseconds(35);
+
+  for(int i = 0; i < bytesToRead; i++){
+    dataBurstMotion[i] = SPI.transfer(0x00);
+  }
+
+  delayMicroseconds(1);
+  digitalWrite(chipSelect, HIGH);
+  delayMicroseconds(1);
+  SPI.endTransaction();
+
+
+
+}
+
+void setPositionZero(){
+  if(Serial.available()){
+    String incomingByte = Serial.readStringUntil('\n');
+    if (incomingByte.equals("zero")){
+      position_X = 0;
+      position_Y = 0;
+    }
+  }
+}
+
 
