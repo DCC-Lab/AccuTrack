@@ -18,6 +18,8 @@ const uint8_t PWR_UP_RST = 0x3A;
 const uint8_t PRODUCT_ID = 0X00;
 const uint8_t INV_PRODUCT_ID = 0X3F;
 const uint8_t MOTION_BURST = 0x50;
+const uint8_t SQUAL_H = 0x07;
+const uint8_t SQUAL_L = 0x08;
 
 const uint8_t READ = 0b01111111; // READ command with 0 on MSB
 const uint8_t WRITE = 0b10000000; // WRITE command with 1 on MSB
@@ -33,6 +35,14 @@ uint8_t dataBurstMotion[15];
 
 long position_X = 0;
 long position_Y = 0;
+float dist_X = 0;
+float dist_Y = 0;
+uint16_t squal = 0;
+
+const float cpi = 0.001402;
+
+int squalCount = 0;
+uint16_t squal_avg = 0;
 
 void setup() {
 
@@ -59,13 +69,15 @@ void setup() {
 
   // motionBurstSetUp();
 
-
 }
 
 
 void loop() {
 
-  setPositionZero();
+  // setPositionZero();
+  // printDelta_XY();
+
+  getSerialInput();
 
   delay(20);
 
@@ -153,21 +165,38 @@ void loop() {
 
   position_X += readDeltaX();
   position_Y += readDeltaY();
-  long position_Total = sqrt(pow(position_X, 2) + pow(position_Y,2));
+  squal = getSqual();
+  squal_avg = squal_avg + squal;
+  squalCount += 1;
+
+  dist_X = position_X * cpi;
+  dist_Y = position_Y * cpi;
+
+
+  // long position_Total = sqrt(pow(position_X, 2) + pow(position_Y,2));
 
 
   // Print the accumulated motion
   Serial.print(" ");
   Serial.print(position_X);
   Serial.print(" ");
-  Serial.print(position_Y);
-  Serial.print(" ");
-  Serial.println(position_Total);
+  Serial.println(position_Y);
+  // Serial.print(" ");
+  // Serial.println(position_Total);
 
-  // Serial.print(" ");
-  // Serial.print(1000);
-  // Serial.print(" ");
-  // Serial.println(-1000);
+  // if (squalCount >= 50){
+  //   Serial.println(squal_avg/50);
+  //   Serial.print(" ");
+  //   Serial.print(squal);
+  //   Serial.print(" ");
+  //   Serial.print(760);
+  //   Serial.print(" ");
+  //   Serial.println(680);
+
+  //   squalCount = 0;
+  //   squal_avg = 0;
+  // }
+
   // motionBitHigh = false; // Reset the motion bit to low until next interrupt
   // }
 
@@ -211,6 +240,19 @@ int16_t readDeltaY() {
   
   return deltaY;
 }
+
+uint16_t getSqual(){
+  delayMicroseconds(20);
+  uint8_t squal_H = readRegister(SQUAL_H, 1);
+  delayMicroseconds(20);
+  uint8_t squal_L = readRegister(SQUAL_L, 1);
+
+  uint16_t squal_T = (squal_H << 8)|squal_L; // Tester avec le mask avant le signed et après le signed voir ce qui est sensé
+
+  // return squal_T & 0xFFF; // squal & 0xFFF because the fisrt four bits of the Upper register are reserved.
+  return squal_T;
+}
+
 
 void pwrUp(){ // Power up sequence, see datasheet
   
@@ -4685,6 +4727,44 @@ void setPositionZero(){
     if (incomingByte.equals("zero")){
       position_X = 0;
       position_Y = 0;
+    }
+  }
+}
+
+void printDelta_XY(){
+  if(Serial.available()){
+    String incomingByte = Serial.readStringUntil('\n');
+    if (incomingByte.equals("xy")){
+      Serial.print(" ");
+      Serial.print(position_X);
+      Serial.print(" ");
+      Serial.println(position_Y);
+    }
+  }
+}
+
+void getSerialInput(){
+  if(Serial.available() > 0){
+    char receivedCommand = Serial.read();
+    switch (receivedCommand){
+
+      case 'Z':
+        position_X = 0;
+        position_Y = 0;
+
+        break;
+      
+      case 'D':
+        Serial.print(dist_X);
+        Serial.print(", ");
+        Serial.println(dist_Y);
+
+        break;
+      
+      case 'S':
+        Serial.println(squal_avg);
+
+        break;
     }
   }
 }
