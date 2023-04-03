@@ -20,18 +20,22 @@ const uint8_t INV_PRODUCT_ID = 0X3F;
 const uint8_t MOTION_BURST = 0x50;
 const uint8_t SQUAL_H = 0x07;
 const uint8_t SQUAL_L = 0x08;
+const uint8_t FRAME_CAPTURE = 0x12;
+const uint8_t RAWDATA_BURST = 0x64;
 
 const uint8_t READ = 0b01111111; // READ command with 0 on MSB
 const uint8_t WRITE = 0b10000000; // WRITE command with 1 on MSB
 
 bool motionBitHigh = false;
 volatile bool dataAvailable = false;
+bool firstFrame = true;
 
 const int interruptPin = 5;
 const int nrstPin = 2;
 const int chipSelect = 10;
 
-uint8_t dataBurstMotion[15];
+uint8_t dataBurstMotion[15]; // Array for burst reading registers
+byte frameArray[1024];  // Array of the frame with values from 1 to 1024
 
 long position_X = 0;
 long position_Y = 0;
@@ -62,6 +66,10 @@ void setup() {
 
   delay(35); // From navigation engine start to valid motion delay
 
+  frameCaptureInit(); // Comment if you want to see displacement , uncomment if you want to take picture
+
+
+
   // attachInterrupt(digitalPinToInterrupt(interruptPin),interruptIN,FALLING);  // Interrupt pin for motion detection. Needs to be created after the pwrUp function
                                                                             // because motionPin is used for chip set-up purpose during pwrUp.
 
@@ -74,15 +82,60 @@ void setup() {
 
 void loop() {
 
-  // setPositionZero();
-  // printDelta_XY();
 
-  getSerialInput();
+  // getSerialInput();
 
-  delay(20);
+//// To get picture of the sensor ////
 
-/// CODE FONCTIONNEL ////////////////////
+  getFrame(); // Comment if you want to see displacement , uncomment if you want to take picture
+  sendFrame(); // Comment if you want to see displacement , uncomment if you want to take picture
+  delay(3000); // To not overfeed the python buffer
 
+
+
+//// To have relative displacement ////
+/*
+  // position_X += readDeltaX();
+  // position_Y += readDeltaY();
+
+  // Serial.print(position_X);
+  // Serial.print(" ");
+  // Serial.println(position_Y);
+*/
+
+//// To have absolute displacement (calibration might be faulty) ////
+/* 
+  // dist_X = position_X * cpi;
+  // dist_Y = position_Y * cpi;
+  // long position_Total = sqrt(pow(position_X, 2) + pow(position_Y,2));
+  // Serial.print(" ");
+  // Serial.println(position_Total);
+*/
+
+//// To see the image quality factor ////
+/*
+  // squal = getSqual();
+  // squal_avg = squal_avg + squal;
+  // squalCount += 1;
+
+  // if (squalCount >= 20){
+  //   // Serial.print(squal);
+  //   // Serial.print(", ");
+  //   Serial.print(squal_avg/20);
+  //   // Serial.print(" ");
+  //   // Serial.print(squal);
+  //   Serial.print(" ");
+  //   Serial.print(760);
+  //   Serial.print(" ");
+  //   Serial.println(680);
+
+  //   squalCount = 0;
+  //   squal_avg = 0;
+  // }
+*/
+
+//// Blabla i want to keep for later ////
+/*
   // motionBurstRead(6); // Motion, Observation, DXL, DXH, DYL, DYH
     
   // int16_t delta_X = dataBurstMotion[3]*256 + dataBurstMotion[2];
@@ -96,7 +149,6 @@ void loop() {
   // Serial.print(" ");
   // Serial.println(-1000);
 
-////////////////////////////////////////
 
 
 
@@ -158,48 +210,9 @@ void loop() {
 
 
 
-  bool moving = readMotion();
+  // bool moving = readMotion();
 
-  // int16_t deltaX = readDeltaX();
-  // int16_t deltaY = readDeltaY();
-
-  position_X += readDeltaX();
-  position_Y += readDeltaY();
-  squal = getSqual();
-  squal_avg = squal_avg + squal;
-  squalCount += 1;
-
-  dist_X = position_X * cpi;
-  dist_Y = position_Y * cpi;
-
-
-  // long position_Total = sqrt(pow(position_X, 2) + pow(position_Y,2));
-
-
-  // Print the accumulated motion
-  Serial.print(" ");
-  Serial.print(position_X);
-  Serial.print(" ");
-  Serial.println(position_Y);
-  // Serial.print(" ");
-  // Serial.println(position_Total);
-
-  // if (squalCount >= 50){
-  //   Serial.println(squal_avg/50);
-  //   Serial.print(" ");
-  //   Serial.print(squal);
-  //   Serial.print(" ");
-  //   Serial.print(760);
-  //   Serial.print(" ");
-  //   Serial.println(680);
-
-  //   squalCount = 0;
-  //   squal_avg = 0;
-  // }
-
-  // motionBitHigh = false; // Reset the motion bit to low until next interrupt
-  // }
-
+*/
 }
 
 void interruptIN() {
@@ -4743,6 +4756,45 @@ void printDelta_XY(){
   }
 }
 
+void frameCaptureInit(){
+  writeRegister(PWR_UP_RST, 0x5A);
+  delay(5);
+  writeRegister(0x1E, 0x08);
+  writeRegister(0x20, 0x84);
+  writeRegister(0x1F, 0x03);
+  writeRegister(CONFIG3, 0x01);
+  delay(35);
+}
+
+void getFrame(){
+  writeRegister(FRAME_CAPTURE, 0x93);
+  writeRegister(FRAME_CAPTURE, 0xC5);
+  delay(20);
+
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
+  digitalWrite(chipSelect, LOW);
+  delayMicroseconds(1);
+  // send the device the register you want to read:
+
+  SPI.transfer(RAWDATA_BURST);
+
+  delayMicroseconds(160);
+
+  for(int i = 0; i < 1024; i++){
+    frameArray[i] = SPI.transfer(0x00);
+    delayMicroseconds(200);
+  }
+
+  delayMicroseconds(1);
+  digitalWrite(chipSelect, HIGH);
+  delayMicroseconds(1);
+  SPI.endTransaction();
+}
+
+void sendFrame(){
+  Serial.write(frameArray, sizeof(frameArray));
+}
+
 void getSerialInput(){
   if(Serial.available() > 0){
     char receivedCommand = Serial.read();
@@ -4765,6 +4817,19 @@ void getSerialInput(){
         Serial.println(squal_avg);
 
         break;
+
+      case 'F':
+        if(firstFrame == true){
+          frameCaptureInit();
+          firstFrame = false;
+        
+        getFrame();
+        sendFrame();
+
+        break;
+
+        }
+
     }
   }
 }
