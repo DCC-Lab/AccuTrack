@@ -28,7 +28,7 @@ const uint8_t WRITE = 0b10000000; // WRITE command with 1 on MSB
 
 bool motionBitHigh = false;
 volatile bool dataAvailable = false;
-bool firstFrame = true;
+// bool firstFrame = true;
 
 const int interruptPin = 5;
 const int nrstPin = 2;
@@ -55,7 +55,11 @@ void setup() {
 
   pinMode(nrstPin, OUTPUT); // NRST pin
   digitalWrite(nrstPin, HIGH);
-  
+  // delay(20);
+  // digitalWrite(nrstPin, LOW);
+  // delay(20);
+  // digitalWrite(nrstPin, HIGH);
+
   pinMode(interruptPin, INPUT_PULLUP);
 
   Serial.begin(115200);
@@ -66,7 +70,7 @@ void setup() {
 
   delay(35); // From navigation engine start to valid motion delay
 
-  frameCaptureInit(); // Comment if you want to see displacement , uncomment if you want to take picture
+  // frameCaptureInit(); // Comment if you want to see displacement , uncomment if you want to take picture
 
 
 
@@ -82,26 +86,28 @@ void setup() {
 
 void loop() {
 
+  delay(20);
 
-  // getSerialInput();
+  getSerialInput();
 
 //// To get picture of the sensor ////
 
-  getFrame(); // Comment if you want to see displacement , uncomment if you want to take picture
-  sendFrame(); // Comment if you want to see displacement , uncomment if you want to take picture
-  delay(3000); // To not overfeed the python buffer
+  // getFrame(); // Comment if you want to see displacement , uncomment if you want to take picture
+  // sendFrame(); // Comment if you want to see displacement , uncomment if you want to take picture
+  // delay(500); // To not overfeed the python buffer
 
 
 
 //// To have relative displacement ////
-/*
-  // position_X += readDeltaX();
-  // position_Y += readDeltaY();
 
-  // Serial.print(position_X);
-  // Serial.print(" ");
-  // Serial.println(position_Y);
-*/
+  bool moving = readMotion(); // IMOPORTANT DE LIRE LE REGISTRE DE MOTION SANS QUOI Dx ET Dy SONT 0XFF
+  position_X += readDeltaX();
+  position_Y += readDeltaY();
+
+  Serial.print(position_X);
+  Serial.print(" ");
+  Serial.println(position_Y);
+
 
 //// To have absolute displacement (calibration might be faulty) ////
 /* 
@@ -4775,14 +4781,15 @@ void getFrame(){
   digitalWrite(chipSelect, LOW);
   delayMicroseconds(1);
   // send the device the register you want to read:
-
+  
   SPI.transfer(RAWDATA_BURST);
+
 
   delayMicroseconds(160);
 
   for(int i = 0; i < 1024; i++){
     frameArray[i] = SPI.transfer(0x00);
-    delayMicroseconds(200);
+    delayMicroseconds(120);
   }
 
   delayMicroseconds(1);
@@ -4792,7 +4799,10 @@ void getFrame(){
 }
 
 void sendFrame(){
+  // Serial.begin(115200);
   Serial.write(frameArray, sizeof(frameArray));
+  Serial.flush();
+  // Serial.end();
 }
 
 void getSerialInput(){
@@ -4819,12 +4829,12 @@ void getSerialInput(){
         break;
 
       case 'F':
-        if(firstFrame == true){
-          frameCaptureInit();
-          firstFrame = false;
-        
-        getFrame();
-        sendFrame();
+        // if(firstFrame == true){
+          // frameCaptureInit();
+          // firstFrame = false;
+        // }
+        // getFrame();
+        // sendFrame();
 
         break;
 
@@ -4832,6 +4842,6 @@ void getSerialInput(){
 
     }
   }
-}
+
 
 
